@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StarForge Flash Tool</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚡ STARFORGE FLASH TOOL</h1>
+      <p>⚙ Firmware Upload System ⚙</p>
+    </div>
+
+    <div class="content">
+      <!-- Board Selection -->
+      <div class="form-group">
+        <label for="board-select">Board Type</label>
+        <select id="board-select">
+          <option value="">Select your board...</option>
+        </select>
+        <p class="help-text">Choose the ESP32 board type you're using</p>
+      </div>
+
+      <!-- Serial Port Selection -->
+      <div class="form-group">
+        <label for="port-select">Serial Port</label>
+        <select id="port-select">
+          <option value="">Select port...</option>
+        </select>
+        <div style="display: flex; gap: 10px; margin-top: 5px;">
+          <button class="refresh-btn" onclick="refreshPorts()">🔄 Refresh Ports</button>
+          <button class="refresh-btn" onclick="detectBoard()" id="detect-btn" disabled>🔍 Detect Board</button>
+        </div>
+        <p class="help-text" id="port-help">Connect your board via USB and select the port</p>
+      </div>
+
+      <!-- Firmware Source -->
+      <div class="form-group">
+        <label>Firmware Source</label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="source-github" name="source" value="github" checked>
+            <label for="source-github">📦 GitHub Release</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="source-local" name="source" value="local">
+            <label for="source-local">📁 Local Folder</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- GitHub Release Selection (shown when GitHub is selected) -->
+      <div class="form-group" id="github-release-group">
+        <label for="release-select">Select Release</label>
+        <select id="release-select" style="width: 100%;">
+          <option value="">Loading releases...</option>
+        </select>
+        <p class="help-text" id="release-help">Loading available releases...</p>
+      </div>
+
+      <!-- Local Folder Selection (hidden by default) -->
+      <div class="form-group" id="local-folder-group" style="display: none;">
+        <label for="folder-path">Firmware Folder</label>
+        <div class="file-input-group">
+          <input type="text" id="folder-path" readonly placeholder="No folder selected">
+          <button class="btn-secondary" onclick="selectLocalFolder()">Browse</button>
+        </div>
+      </div>
+
+      <!-- Advanced Configuration Section (Collapsible) -->
+      <div class="form-group">
+        <div class="advanced-header" onclick="toggleAdvancedConfig()">
+          <span>⚙️ Advanced Configuration</span>
+          <span id="advanced-toggle" class="toggle-icon">▼</span>
+        </div>
+        <div id="advanced-config-body" class="advanced-body" style="display: none;">
+          <div class="advanced-content">
+            <div class="form-group" style="margin-bottom: 15px;">
+              <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" id="enable-custom-pins" onchange="toggleCustomPins()" style="width: auto; margin-right: 10px;">
+                <span>Enable Custom Pin Configuration</span>
+              </label>
+              <p class="help-text">Override default pins from config.h (for custom boards)</p>
+            </div>
+
+            <div id="custom-pins-section" style="display: none;">
+              <!-- Pin Presets -->
+              <div class="form-group">
+                <label>Load Pin Profile</label>
+                <select id="pin-preset" onchange="loadPinPreset()">
+                  <option value="">-- Select Preset --</option>
+                  <option value="esp32c3-default">ESP32-C3 SuperMini (Default)</option>
+                  <option value="esp32c6-default">ESP32-C6 (Default)</option>
+                  <option value="esp32-default">ESP32 Generic (Default)</option>
+                </select>
+              </div>
+
+              <!-- Core Pins -->
+              <div class="pin-group">
+                <h4>Core Pins (Required)</h4>
+                <div class="pin-grid">
+                  <div class="pin-input">
+                    <label>RSSI Input (ADC):</label>
+                    <input type="number" id="pin-rssi" min="0" max="48" value="3" />
+                  </div>
+                  <div class="pin-input">
+                    <label>RX5808 Data (MOSI):</label>
+                    <input type="number" id="pin-data" min="0" max="48" value="6" />
+                  </div>
+                  <div class="pin-input">
+                    <label>RX5808 Clock (SCK):</label>
+                    <input type="number" id="pin-clk" min="0" max="48" value="4" />
+                  </div>
+                  <div class="pin-input">
+                    <label>RX5808 Select (CS):</label>
+                    <input type="number" id="pin-sel" min="0" max="48" value="7" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Warning Message -->
+              <div class="warning-box">
+                <strong>⚠️ Warning:</strong> Incorrect pin assignments can prevent your board from booting. 
+                Double-check your board's pinout before flashing.
+              </div>
+            </div>
+
+            <!-- Serial Monitor (read-only) -->
+            <div class="form-group">
+              <label>Serial Monitor</label>
+              <div class="serial-monitor-header">
+                <button class="btn-secondary" id="serial-monitor-btn" onclick="toggleSerialMonitor()">
+                  🖥️ Show Serial Output
+                </button>
+                <select id="serial-baud" class="serial-baud-select">
+                  <option value="9600">9600</option>
+                  <option value="115200" selected>115200</option>
+                  <option value="921600">921600</option>
+                </select>
+              </div>
+              <p class="help-text serial-monitor-help-text" id="serial-monitor-help">
+                Uses the selected serial port at the baud rate above.
+              </p>
+              <div class="console-output serial-monitor-output" id="serial-monitor-output"></div>
+            </div>
+
+            <!-- Full Chip Erase -->
+            <div class="form-group">
+              <label>Dangerous Operations</label>
+              <button class="btn-danger" id="erase-all-btn" onclick="eraseAllFlash()" style="width: 100%;">
+                ⚠️ Erase All (Full Chip Erase)
+              </button>
+              <p class="help-text" style="color: #ff6b6b; margin-top: 5px;">
+                ⚠️ WARNING: This erases the whole chip, including NVS and factory calibration. Use it only for a complete reset.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="button-group">
+        <button class="btn-primary" id="flash-btn" onclick="startFlashing()">
+          ⚡ Flash Firmware
+        </button>
+        <button class="btn-danger" id="erase-btn" onclick="eraseFlash()">
+          🗑️ Erase Flash
+        </button>
+      </div>
+
+      <!-- Progress Section -->
+      <div class="progress-section" id="progress-section">
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progress-bar" style="width: 0%">0%</div>
+        </div>
+        <div class="console-output" id="console-output"></div>
+      </div>
+
+      <!-- Status Messages -->
+      <div class="status-message" id="status-message"></div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
+

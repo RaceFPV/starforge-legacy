@@ -1,0 +1,56 @@
+name: Build Validation
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'platformio.ini'
+      - 'partitions_2mb.csv'
+      - 'sdkconfig.2mb'
+      - '.github/workflows/build-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  build-validation:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        environment:
+          - esp32-c3-supermini
+          - esp32-c3
+          - esp32-c3-zero
+          - nuclearcounter
+          - esp32-c6
+          - esp32dev
+          - esp32dev-2mb
+          - esp32-s3
+          - esp32-s3-t-energy
+          - esp32-s2
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Cache PlatformIO
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-pio-${{ matrix.environment }}-${{ hashFiles('platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-pio-${{ matrix.environment }}-
+          ${{ runner.os }}-pio-
+
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install platformio
+
+    - name: Compile ${{ matrix.environment }}
+      run: pio run -e ${{ matrix.environment }}

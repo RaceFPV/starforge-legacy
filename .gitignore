@@ -1,0 +1,42 @@
+# PlatformIO
+.pio
+.platformio/
+.pioenvs
+.piolibdeps
+.vscode/
+.clang_complete
+.gcc-flags.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+
+# Build artifacts
+*.o
+*.a
+*.elf
+*.bin
+*.hex
+*.map
+
+# IDE and OS
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Credentials
+secrets.h
+credentials.h
+config_local.h

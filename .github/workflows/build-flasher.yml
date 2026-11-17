@@ -1,0 +1,253 @@
+name: Build StarForge Flash Tool
+
+on:
+  release:
+    types: [ published ]  # Trigger only when release is published (runs once)
+  workflow_dispatch:  # Allows manual triggering
+
+permissions:
+  contents: write
+
+jobs:
+  build-flasher:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Clean up any stale repository state
+      if: runner.os == 'Linux'
+      run: |
+        # Remove any existing repository to prevent state conflicts
+        if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+          echo "Cleaning up stale repository state..."
+          rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+        fi
+    
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history (not shallow clone)
+        fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+        ref: ${{ github.ref }}  # Explicitly set the ref
+    
+    - name: Verify repository state
+      shell: bash
+      run: |
+        echo "Verifying repository state..."
+        # Quick check - only verify if we can access the current ref
+        if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+          echo "⚠️ Repository state issue detected, attempting to repair..."
+          git fetch --all --tags --force || true
+          git gc --prune=now || true
+        fi
+        echo "✅ Repository state verified"
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      working-directory: flash_tool
+      run: npm install
+    
+    - name: Download esptool binaries
+      working-directory: flash_tool
+      shell: bash
+      run: |
+        if [ -f "download-esptool.sh" ]; then
+          chmod +x download-esptool.sh
+          ./download-esptool.sh
+        else
+          echo "esptool download script not found"
+          exit 1
+        fi
+    
+    - name: Setup PlatformIO Core
+      working-directory: flash_tool
+      run: npm run setup-platformio
+      shell: bash
+    
+    - name: Extract and set version from release tag
+      working-directory: flash_tool
+      shell: bash
+      run: |
+        # Generate unique build number (timestamp-based for uniqueness)
+        # This ensures each build has a unique CFBundleVersion for Mac
+        BUILD_NUMBER=$(date +%s)
+        echo "Build number: $BUILD_NUMBER"
+        
+        if [ "${{ github.event_name }}" == "release" ] && [ -n "${{ github.event.release.tag_name }}" ]; then
+          # Extract version from release tag (remove 'v' prefix if present)
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          echo "Setting version to: $VERSION (from release tag)"
+        else
+          # For manual runs or non-release triggers, use package.json version + build number
+          BASE_VERSION=$(node -p "require('./package.json').version")
+          VERSION="${BASE_VERSION}-dev.${BUILD_NUMBER}"
+          echo "Setting version to: $VERSION (dev build)"
+        fi
+        
+        # Update package.json version
+        npm version "$VERSION" --no-git-tag-version
+        
+        # Also set it as environment variables for electron-builder
+        echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+        echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+        echo "✅ Version set to: $VERSION"
+        echo "✅ Build number set to: $BUILD_NUMBER"
+    
+    - name: Clean up volumes and temp directories (macOS)
+      if: matrix.os == 'macos-latest'
+      shell: bash
+      run: |
+        echo "Cleaning up volumes and temp directories..."
+        # Unmount any residual DMG volumes
+        for vol in $(mount | grep '/Volumes/' | awk '{print $3}' || true); do
+          if [ -n "$vol" ]; then
+            echo "Unmounting volume: $vol"
+            hdiutil detach "$vol" -force 2>/dev/null || true
+          fi
+        done
+        # Clean workspace temp files
+        rm -rf "${{ github.workspace }}/flash_tool/dist"/* 2>/dev/null || true
+        echo "✅ Cleanup complete"
+    
+    - name: Build Electron app (macOS)
+      if: matrix.os == 'macos-latest'
+      working-directory: flash_tool
+      shell: bash
+      run: |
+        echo "Building for ARM64 (Apple Silicon) only..."
+        
+        # Retry logic for hdiutil transient failures
+        MAX_ATTEMPTS=3
+        ATTEMPT=1
+        while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+          echo "Build attempt $ATTEMPT of $MAX_ATTEMPTS..."
+          
+          # Build with explicit version and build number to ensure uniqueness
+          # Build for ARM64 only (Apple Silicon) to avoid hdiutil conflicts
+          if npx electron-builder --mac --arm64 \
+            --config.mac.bundleVersion=${{ env.BUILD_NUMBER }} \
+            --config.extraMetadata.version=${{ env.APP_VERSION }} \
+            --publish never; then
+            echo "✅ Build succeeded on attempt $ATTEMPT"
+            break
+          else
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Build failed after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            echo "⚠️ Build attempt $ATTEMPT failed, cleaning up and retrying..."
+            # Clean up volumes and wait before retry
+            for vol in $(mount | grep '/Volumes/' | awk '{print $3}' || true); do
+              if [ -n "$vol" ]; then
+                hdiutil detach "$vol" -force 2>/dev/null || true
+              fi
+            done
+            sleep 5
+            ATTEMPT=$((ATTEMPT + 1))
+          fi
+        done
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CSC_IDENTITY_AUTO_DISCOVERY: false
+        APP_VERSION: ${{ env.APP_VERSION }}
+        BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+        DEBUG: electron-builder
+        DEBUG_DMG: "true"
+    
+    - name: Remove quarantine attributes (macOS)
+      if: matrix.os == 'macos-latest'
+      working-directory: flash_tool
+      shell: bash
+      run: |
+        # Remove quarantine attributes to prevent "app is damaged" error
+        find dist -name "*.app" -exec xattr -cr {} \;
+        find dist -name "*.dmg" -exec xattr -cr {} \;
+        find dist -name "*.zip" -exec xattr -cr {} \;
+        echo "✅ Quarantine attributes removed"
+    
+    - name: Build Electron app (Windows)
+      if: matrix.os == 'windows-latest'
+      working-directory: flash_tool
+      shell: bash
+      run: |
+        # Build with explicit version to ensure correct artifact naming
+        npx electron-builder --win \
+          --config.extraMetadata.version=${{ env.APP_VERSION }} \
+          --publish never
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        APP_VERSION: ${{ env.APP_VERSION }}
+    
+    - name: List build outputs
+      working-directory: flash_tool
+      shell: bash
+      run: |
+        echo "=== Build artifacts ==="
+        ls -lh dist/ || dir dist
+    
+    - name: Upload macOS artifacts
+      if: matrix.os == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: StarForge-Flash-Tool-macOS-${{ env.APP_VERSION }}
+        path: |
+          flash_tool/dist/*.dmg
+          flash_tool/dist/*.zip
+    
+    - name: Upload Windows artifacts
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: StarForge-Flash-Tool-Windows-${{ env.APP_VERSION }}
+        path: |
+          flash_tool/dist/*.exe
+          flash_tool/dist/*.msi
+    
+    - name: Upload to GitHub Release (macOS)
+      if: github.event_name == 'release' && matrix.os == 'macos-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          flash_tool/dist/*.dmg
+          flash_tool/dist/*.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Upload to GitHub Release (Windows)
+      if: github.event_name == 'release' && matrix.os == 'windows-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          flash_tool/dist/*.exe
+          flash_tool/dist/*.msi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Summary job
+  summary:
+    needs: build-flasher
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Build Summary
+      run: |
+        echo "### Flash Tool Build Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Flash Tool apps built successfully" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Download installers from the Actions tab or releases page" >> $GITHUB_STEP_SUMMARY
+

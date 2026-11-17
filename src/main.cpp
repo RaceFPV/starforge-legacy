@@ -3,6 +3,7 @@
 #include "config/config_loader.h"
 #include "timing_core.h"
 #include "node_mode.h"
+#include "system/serial_guard.h"
 #include <nvs_flash.h>
 
 // RotorHazard reads these exact strings over the node serial protocol.
@@ -21,6 +22,8 @@ NodeMode node;
 
 void setup() {
   Serial.begin(UART_BAUD_RATE);
+  // Keep ESP-IDF and driver log text off the RotorHazard link.
+  silenceSystemOutput();
   delay(200);
 
   // Drop bootloader text so it is not parsed as a node command.

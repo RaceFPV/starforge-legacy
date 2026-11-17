@@ -7,6 +7,7 @@ RotorHazard node firmware. On boot the device speaks the RotorHazard node serial
 - RotorHazard node protocol (`src/node_mode.cpp`), API level 35
 - RX5808 tuning, RSSI sampling, and lap detection (`src/timing_core.cpp`)
 - Kalman RSSI filter
+- ESP32-C5: the chip's own 5 GHz radio as the receiver, no RX5808 needed (`src/receiver/c5_radio.cpp`, see [docs/ESP32_C5.md](docs/ESP32_C5.md))
 - Status LED
 - Optional custom RX5808 pins stored in NVS
 
@@ -29,7 +30,11 @@ pio run -e esp32-c3-supermini --target upload
 
 GitHub Actions builds every board when a release is published, and checks that the firmware compiles on pull requests.
 
-Other environments: `esp32-c3`, `esp32-c3-zero`, `esp32-c6`, `esp32dev`, `esp32dev-2mb`, `esp32-s3`, `esp32-s3-t-energy`, `esp32-s2`, `nuclearcounter`.
+Other environments: `esp32-c3`, `esp32-c3-zero`, `esp32-c6`, `esp32dev`, `esp32dev-2mb`, `esp32-s3`, `esp32-s3-t-energy`, `esp32-s2`, `nuclearcounter`, `esp32-c5`, `esp32-c5-zero`.
+
+The `esp32-c5` and `esp32-c5-zero` builds have no RX5808 pins: the C5 receives the VTX itself. See [docs/ESP32_C5.md](docs/ESP32_C5.md).
+
+Host unit tests: `bash test/unit/run.sh` (needs g++).
 
 Pin maps live in `src/config/config.h`. ESP32-C3 SuperMini defaults:
 

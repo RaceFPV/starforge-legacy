@@ -128,6 +128,19 @@ void TimingCore::begin() {
     Serial.println("TimingCore: Initializing...");
   }
   
+#if SF_RECEIVER_C5_NATIVE
+  // ESP32-C5: start the C5's own radio as the receiver. No RX5808 pins and
+  // no ADC are used.
+  use_dma = false;
+#if defined(C5_ANT_SELECT_PIN)
+  pinMode(C5_ANT_SELECT_PIN, OUTPUT);
+  digitalWrite(C5_ANT_SELECT_PIN, C5_ANT_EXTERNAL ? HIGH : LOW);
+#endif
+  if (!c5_radio.begin(state.frequency_mhz) && debug_enabled) {
+    Serial.println("C5 radio failed to start");
+  }
+  c5_radio.waitSettled(100);
+#else
   // Setup pins
   pinMode(g_rssi_input_pin, INPUT);
   
@@ -153,6 +166,7 @@ void TimingCore::begin() {
   
   // Set default frequency
   setRX5808Frequency(state.frequency_mhz);
+#endif  // SF_RECEIVER_C5_NATIVE
   
   // Initialize Kalman filter with some test readings to stabilize it
   for (int i = 0; i < 10; i++) {
@@ -164,9 +178,9 @@ void TimingCore::begin() {
   
   // RSSI history buffer is allocated on first use.
 
-  // ESP32-C3/C6 (single core): no core pinning.
-  // Dual-core ESP32: pin the timing task to core 1.
-#if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)
+  // Single-core chips (C3, C5, C6, S2): no core pinning.
+  // Dual-core ESP32/S3: pin the timing task to core 1.
+#if portNUM_PROCESSORS == 1
   xTaskCreate(timingTask, "TimingTask", 4096, this, TIMING_PRIORITY, &timing_task_handle);
 #else
   xTaskCreatePinnedToCore(timingTask, "TimingTask", 4096, this, TIMING_PRIORITY, &timing_task_handle, 1);
@@ -252,10 +266,14 @@ void TimingCore::timingTask(void* parameter) {
             // Strategy 4: Try allocating in smaller chunks and see if we can get any memory
             // This helps diagnose if it's a fragmentation issue
             void* test_alloc = malloc(1024);
+            // Only print in debug mode: the serial port carries
+            // RotorHazard's binary protocol.
             if (test_alloc) {
               free(test_alloc);
-              Serial.printf("WARNING: Failed to allocate RSSI history buffer (%d KB) - heap fragmented (small allocs work)\n", required_bytes / 1024);
-            } else {
+              if (core->debug_enabled) {
+                Serial.printf("WARNING: Failed to allocate RSSI history buffer (%d KB) - heap fragmented (small allocs work)\n", required_bytes / 1024);
+              }
+            } else if (core->debug_enabled) {
               Serial.printf("WARNING: Failed to allocate RSSI history buffer (%d KB) - out of memory\n", required_bytes / 1024);
             }
           } else {
@@ -407,6 +425,15 @@ void TimingCore::timingTask(void* parameter) {
 }
 
 uint8_t TimingCore::readRawRSSI() {
+#if SF_RECEIVER_C5_NATIVE
+  // Like the RX5808 path below: after a retune, wait for the radio to settle
+  // rather than report a reading from the old channel.
+  if (recent_freq_change) {
+    c5_radio.waitSettled(RX5808_MIN_TUNETIME);
+    recent_freq_change = false;
+  }
+  return c5_radio.rssi();
+#else
   // Check if frequency was recently changed - RSSI is unstable during tuning
   // Wait for tuning to complete before reading (same as RotorHazard)
   if (recent_freq_change) {
@@ -430,6 +457,7 @@ uint8_t TimingCore::readRawRSSI() {
   // Rescale from 0-2047 to 0-255 (divide by 8)
   // This gives us the standard 0-255 RSSI range used by lap timing systems
   return adc_value >> 3;
+#endif  // SF_RECEIVER_C5_NATIVE
 }
 
 uint8_t TimingCore::filterRSSI(uint8_t raw_rssi) {
@@ -671,6 +699,16 @@ void TimingCore::setupRX5808() {
 }
 
 void TimingCore::setRX5808Frequency(uint16_t freq_mhz) {
+#if SF_RECEIVER_C5_NATIVE
+  // ESP32-C5: tune the C5's own radio. Same range check as the RX5808.
+  if (freq_mhz < MIN_FREQ || freq_mhz > MAX_FREQ) {
+    return;
+  }
+  state.frequency_mhz = c5_radio.tune(freq_mhz);
+  recent_freq_change = true;
+  freq_change_time = millis();
+  return;
+#endif
   // Check if enough time has elapsed since last RX5808 bus access
   // This prevents bus conflicts and ensures reliable communication
   uint32_t timeVal = millis() - lastRX5808BusTimeMs;

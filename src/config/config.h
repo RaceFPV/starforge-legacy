@@ -7,7 +7,31 @@
 #define SF_FW_VERSION "2.0.4"
 
 // Hardware pin definitions - board-specific
-#if defined(CONFIG_IDF_TARGET_ESP32C6)
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+    // ESP32-C5 (single-core RISC-V, 2.4 + 5 GHz radio)
+    // By default the C5's own radio is the receiver (SF_RECEIVER_C5_NATIVE,
+    // below) and no RX5808 is fitted. The RX5808 pins are still defined so
+    // a C5 can drive an external RX5808 with -DSF_RECEIVER_C5_NATIVE=0.
+    // Pins avoid the C5 strapping pins (2, 3, 7, 8, 9, 25-28), UART0 (11, 12)
+    // and USB (13, 14).
+    #define RSSI_INPUT_PIN      1     // GPIO1 (ADC1) - RSSI input (external RX5808 only)
+    #define RX5808_DATA_PIN     5     // GPIO5 - DATA (external RX5808 only)
+    #define RX5808_CLK_PIN      4     // GPIO4 - CLK (external RX5808 only)
+    #define RX5808_SEL_PIN      6     // GPIO6 - LE (external RX5808 only)
+    #define USE_DMA_ADC         1
+    #define UART_BAUD_RATE      921600  // USB CDC ignores this, but set for compatibility
+    #define STATUS_LED_PIN      27    // GPIO27 - WS2812 RGB LED (DevKitC-1 and C5-Zero)
+    #define STATUS_LED_WS2812   1
+    #define STATUS_LED_INVERTED 0
+    #define RSSI_HISTORY_SIZE   10000  // 10,000 samples = ~3.3 minutes @ 50Hz (50 KB); Wi-Fi uses the rest
+    #if defined(BOARD_ESP32_C5_ZERO)
+        // Waveshare ESP32-C5-Zero antenna switch: LOW = onboard, HIGH = IPEX connector.
+        #define C5_ANT_SELECT_PIN   26
+        #ifndef C5_ANT_EXTERNAL
+            #define C5_ANT_EXTERNAL 0
+        #endif
+    #endif
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
     // ESP32-C6 (single-core RISC-V)
     // GPIO3 is used for USB, so RSSI uses GPIO0
     #define RSSI_INPUT_PIN      0     // GPIO0 (ADC1_CH0) - RSSI input from RX5808
@@ -104,9 +128,77 @@
 #define MIN_LAP_MS          0     // Minimum lap time in milliseconds (0 = disabled, prevents peak capture until elapsed)
 #define MIN_LAP_TIME_MS     3000  // Minimum time between laps (3 seconds) - prevents false laps from threshold bouncing
 
+// ============================================
+// Native ESP32-C5 receiver
+// ============================================
+// On an ESP32-C5 the chip's own 5 GHz radio is the receiver: no RX5808, no
+// ADC. See src/receiver/c5_radio.* and docs/ESP32_C5.md. Every value below
+// can be overridden from platformio.ini build_flags.
+#ifndef SF_RECEIVER_C5_NATIVE
+  #if defined(CONFIG_IDF_TARGET_ESP32C5)
+    #define SF_RECEIVER_C5_NATIVE 1
+  #else
+    #define SF_RECEIVER_C5_NATIVE 0
+  #endif
+#endif
+
+#if SF_RECEIVER_C5_NATIVE
+  // dBm that reads as RSSI 0 and as 255. Linear in between, like an RX5808.
+  #ifndef C5_RSSI_DBM_FLOOR
+    #define C5_RSSI_DBM_FLOOR       -100
+  #endif
+  #ifndef C5_RSSI_DBM_CEIL
+    #define C5_RSSI_DBM_CEIL        -20
+  #endif
+  // Radio reading rate. Filter windows below are in samples (1 ms each).
+  #define C5_SAMPLE_RATE_HZ         1000
+  // Removes upward spikes shorter than this (background Wi-Fi packets).
+  #ifndef C5_FILTER_OPEN_SAMPLES
+    #define C5_FILTER_OPEN_SAMPLES  5
+  #endif
+  // Fills downward dips shorter than this (the VTX reading's own dropouts).
+  #ifndef C5_FILTER_CLOSE_SAMPLES
+    #define C5_FILTER_CLOSE_SAMPLES 9
+  #endif
+  // Within this many MHz of a Wi-Fi channel centre, the Wi-Fi driver's own
+  // tuning is used; further off, the PHY is moved to the exact frequency.
+  #ifndef C5_WIFI_TUNE_TOLERANCE_MHZ
+    #define C5_WIFI_TUNE_TOLERANCE_MHZ 1
+  #endif
+  // Readings are discarded for this long after a retune.
+  #ifndef C5_SETTLE_MS
+    #define C5_SETTLE_MS            15
+  #endif
+  // 802.11p receive settings (reported to help above ~5750 MHz). Off until
+  // A/B tested on the bench.
+  #ifndef C5_ENABLE_11P
+    #define C5_ENABLE_11P           0
+  #endif
+  #ifndef C5_11P_FROM_MHZ
+    #define C5_11P_FROM_MHZ         5750
+  #endif
+  // The radio reading is already cleaned up by the burst filter, so the
+  // Kalman filter only needs to smooth the 1 dB steps (about 4 ms).
+  #ifndef RSSI_FILTER_Q
+    #define RSSI_FILTER_Q           100   // Measurement noise (scaled by 0.01 = 1.0)
+  #endif
+  #ifndef RSSI_FILTER_R
+    #define RSSI_FILTER_R           833   // Process noise (scaled by 0.0001 = 0.0833)
+  #endif
+#endif
+
 // Kalman filter configuration for RSSI filtering
-#define RSSI_FILTER_Q       2000  // Measurement noise (scaled by 0.01 = 20.0)
-#define RSSI_FILTER_R       40    // Process noise (scaled by 0.0001 = 0.004)
+#ifndef RSSI_FILTER_Q
+  #define RSSI_FILTER_Q       2000  // Measurement noise (scaled by 0.01 = 20.0)
+#endif
+#ifndef RSSI_FILTER_R
+  #define RSSI_FILTER_R       40    // Process noise (scaled by 0.0001 = 0.004)
+#endif
+
+// Keep system log text off the RotorHazard serial link (src/system/serial_guard.*).
+#ifndef SF_SILENCE_SYSTEM_OUTPUT
+  #define SF_SILENCE_SYSTEM_OUTPUT 1
+#endif
 
 // FreeRTOS task priority for the timing loop
 #if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)

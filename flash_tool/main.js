@@ -69,6 +69,28 @@ const BOARD_CONFIGS = {
       spiffs: '0x290000'
     }
   },
+  'esp32-c5': {
+    name: 'ESP32-C5 DevKitC-1 (built-in receiver, no RX5808)',
+    chip: 'esp32c5',
+    flashAddresses: {
+      bootloader: '0x2000',
+      partitions: '0x8000',
+      nvs: '0x9000',
+      firmware: '0x10000',
+      spiffs: '0x290000'
+    }
+  },
+  'esp32-c5-zero': {
+    name: 'Waveshare ESP32-C5-Zero (built-in receiver, no RX5808)',
+    chip: 'esp32c5',
+    flashAddresses: {
+      bootloader: '0x2000',
+      partitions: '0x8000',
+      nvs: '0x9000',
+      firmware: '0x10000',
+      spiffs: '0x290000'
+    }
+  },
   'esp32dev': {
     name: 'ESP32 Dev Module (4MB)',
     chip: 'esp32',
@@ -394,6 +416,10 @@ function suggestBoardFromChip(chipType, esptoolOutput = '') {
   
   if (chipLower.includes('esp32-c3')) {
     return 'esp32-c3-supermini'; // Most common C3 board (NuclearCounter is C3-based as well)
+  } else if (chipLower.includes('esp32-c5')) {
+    return 'esp32-c5';
+  } else if (chipLower.includes('esp32-c6')) {
+    return 'esp32-c6';
   } else if (chipLower.includes('esp32-s3')) {
     return 'esp32-s3';
   } else if (chipLower.includes('esp32-s2')) {
@@ -1255,7 +1281,9 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       'esp32dev-2mb': 'esp32dev-2mb',
       'esp32-s3': 'esp32-s3',
       'esp32-s3-t-energy': 'esp32-s3-t-energy',
-      'esp32-s2': 'esp32-s2'
+      'esp32-s2': 'esp32-s2',
+      'esp32-c5': 'esp32-c5',
+      'esp32-c5-zero': 'esp32-c5-zero'
     };
     
     const envName = envMap[boardType];

@@ -9,7 +9,8 @@ echo ""
 RESOURCES_DIR="$(dirname "$0")/resources/bin"
 mkdir -p "$RESOURCES_DIR"
 
-ESPTOOL_VERSION="v4.7.0"
+# v4.8.1 or later is needed for the ESP32-C5.
+ESPTOOL_VERSION="v4.8.1"
 BASE_URL="https://github.com/espressif/esptool/releases/download/${ESPTOOL_VERSION}"
 
 echo "Creating resources directory: $RESOURCES_DIR"

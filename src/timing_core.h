@@ -6,6 +6,7 @@
 #include "config/config.h"
 #include "esp_adc/adc_continuous.h"
 #include "filters/kalman.h"
+#include "receiver/c5_radio.h"
 
 // Structure to hold lap data
 struct LapData {
@@ -66,6 +67,11 @@ private:
   
   // RSSI filtering - Kalman filter
   KalmanFilter rssi_filter;
+
+#if SF_RECEIVER_C5_NATIVE
+  // ESP32-C5: the chip's own radio replaces the RX5808 and the ADC
+  C5Radio c5_radio;
+#endif
   
   // Peak tracking
   uint8_t rssi_peak;           // Current peak RSSI value

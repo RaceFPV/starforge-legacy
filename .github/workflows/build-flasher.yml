@@ -57,7 +57,7 @@ jobs:
     
     - name: Install dependencies
       working-directory: flash_tool
-      run: npm install
+      run: npm ci
     
     - name: Download esptool binaries
       working-directory: flash_tool

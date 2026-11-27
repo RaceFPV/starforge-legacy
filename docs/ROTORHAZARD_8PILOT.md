@@ -1,8 +1,24 @@
 # 8-pilot mode: one ESP32-C5 as eight RotorHazard nodes
 
-Status: **specification, not implemented.** Target firmware: StarForge Legacy
-2.1.0 (C5 native builds). Reference server: RotorHazard Rust
-`rh-server-rust-v4.6.0-dev.5` (the protocol is identical in the Python server).
+Status: **implemented and host-tested; bench validation outstanding.** Target
+firmware: StarForge Legacy 2.1.0 (C5 native builds). Reference server:
+RotorHazard Rust `rh-server-rust-v4.6.0-dev.5` (the protocol is identical in the
+Python server).
+
+What exists now:
+
+| Piece | Where |
+|---|---|
+| Seat state, detection, pass timing, extremums | `src/multipilot/seat_engine.{h,cpp}` |
+| Framing + the API 36 protocol surface | `src/multipilot/rh_node.{h,cpp}` |
+| Hopping receiver (fast retune, per-seat filters) | `src/multipilot/c5_hop_radio.*`, `c5_seat_sampler.*` |
+| Firmware wiring (multi build only) | `src/main.cpp` (`SF_SEAT_COUNT > 1`) |
+| Host unit tests | `test/unit/test_seat_engine.cpp` (`bash test/unit/run.sh`) |
+| Conformance against the real server | `test/tools/test_rust_server_8seats.sh` |
+
+The single-seat targets are untouched: `SF_SEAT_COUNT` defaults to 1 and the
+`TimingCore`/`NodeMode` path still compiles and runs for every non-C5 board.
+A C5 built with `-DSF_SEAT_COUNT=1` keeps the old single-seat behaviour.
 
 ## 1. Goal
 
@@ -339,17 +355,26 @@ release, with no hardware attached.
 
 | Phase | Work | Exit criterion |
 |---|---|---|
-| P0 | Bench-measure settle time and hop cost (§5) | numbers recorded in this doc |
-| P1 | Seat struct + sampler refactor, single seat unchanged | unit tests 1–5 pass, single-seat build still passes the existing mock-server test |
-| P2 | Multi-node protocol, slot routing, `0x7A` echo | pty conformance shows 8 nodes discovered and programmed |
-| P3 | API 36 `0x04`, disabled seats, warning path | server accepts a good frequency silently and warns on an untunable one |
-| P4 | Pass timing, extremums, 250 ms flag, force-end | laps arrive at ±2 ms of the injected pass |
-| P5 | Bench validation, docs, 2.1.0 release | §9.3 checklist signed off |
+| P0 | Bench-measure settle time and hop cost (§5) | **open** — `C5_HOP_SETTLE_US` is 500 µs, a placeholder |
+| P1 | Seat struct + sampler refactor, single seat unchanged | **done** — unit tests pass, non-C5 builds unchanged |
+| P2 | Multi-node protocol, slot routing, `0x7A` echo | **done** — conformance shows 8 nodes discovered and programmed |
+| P3 | API 36 `0x04`, disabled seats, warning path | **done** — server silent on a good frequency, warns on 5000 MHz |
+| P4 | Pass timing, extremums, 250 ms flag, force-end | **done on the host** — laps time within 1 ms of the injected peak |
+| P5 | Bench validation, docs, 2.1.0 release | **open** — §9.3 checklist |
 
-P1 and P2 can land behind `SF_SEAT_COUNT`, so a bad refactor cannot break the
+P1 and P2 landed behind `SF_SEAT_COUNT`, so the refactor cannot break the
 C3/C6/S2/S3 builds.
 
-## 11. Risks
+## 11. Provenance
+
+The behaviour in §5 (a PLL retune is settled after ~300 µs) and the rejection
+rules in §4.3 are facts taken from the published notes of the FPVGate C5MK
+project, which is CC BY-NC-SA 4.0. No code from it is used here: this
+implementation was written for StarForge from the protocol and those published
+facts, the same way `docs/ESP32_C5.md` records its sources. Do not paste code
+from that project into this repository - the licences are incompatible.
+
+## 12. Risks
 
 - **Settle budget** (§5) — the whole feature depends on it. Measure first.
 - **Undocumented PHY functions** — unchanged from `docs/ESP32_C5.md`; the C5
@@ -364,7 +389,7 @@ C3/C6/S2/S3 builds.
   cheap.
 - **RAM** — extremum queues and history per seat; trim history in 8-pilot mode.
 
-## 12. Open questions
+## 13. Open questions
 
 1. Should the eight seats follow a band automatically (R1–R8) on first boot, or
    wait for the server's profile? Default: wait — the server writes the profile,

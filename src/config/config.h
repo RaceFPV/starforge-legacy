@@ -195,6 +195,34 @@
   #define RSSI_FILTER_R       40    // Process noise (scaled by 0.0001 = 0.004)
 #endif
 
+// ============================================
+// Multi-pilot mode (several RotorHazard seats on one board)
+// ============================================
+// Only a board with the native receiver can do this: one radio hops between
+// seats, so it is meaningless with an external RX5808. The C5 environments set
+// SF_SEAT_COUNT=8; every other target stays single-seat and unchanged.
+#ifndef SF_SEAT_COUNT
+  #define SF_SEAT_COUNT 1
+#endif
+#if SF_SEAT_COUNT > 1 && !SF_RECEIVER_C5_NATIVE
+  #error "SF_SEAT_COUNT > 1 needs the native ESP32-C5 receiver (SF_RECEIVER_C5_NATIVE=1)"
+#endif
+#if SF_SEAT_COUNT > 1
+  // Readings are ignored for this long after a retune. Placeholder until it is
+  // measured on the bench: the reference implementation reports its PLL
+  // settled after 300 us. See docs/ROTORHAZARD_8PILOT.md, phase 0.
+  #ifndef C5_HOP_SETTLE_US
+    #define C5_HOP_SETTLE_US       500
+  #endif
+  // The burst filter windows are in samples of one seat now, not milliseconds.
+  #ifndef C5_MP_FILTER_OPEN
+    #define C5_MP_FILTER_OPEN      3
+  #endif
+  #ifndef C5_MP_FILTER_CLOSE
+    #define C5_MP_FILTER_CLOSE     5
+  #endif
+#endif
+
 // Keep system log text off the RotorHazard serial link (src/system/serial_guard.*).
 #ifndef SF_SILENCE_SYSTEM_OUTPUT
   #define SF_SILENCE_SYSTEM_OUTPUT 1

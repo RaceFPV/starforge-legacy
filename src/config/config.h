@@ -4,7 +4,7 @@
 // StarForge Legacy is a RotorHazard timing node. RotorHazard reads SF_FW_VERSION
 // from the firmware version string. Keep it aligned with the release tag,
 // without a leading v.
-#define SF_FW_VERSION "2.1.0"
+#define SF_FW_VERSION "2.1.1"
 
 // Hardware pin definitions - board-specific
 #if defined(CONFIG_IDF_TARGET_ESP32C5)

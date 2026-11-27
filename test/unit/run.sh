@@ -12,4 +12,3 @@ g++ -std=c++17 -Wall -Wextra -O2 -I"$REPO/src" -o build/test_seat_engine \
     test_seat_engine.cpp "$REPO/src/multipilot/seat_engine.cpp" "$REPO/src/multipilot/rh_node.cpp"
 ./build/test_seat_engine
 
-python3 test_flasher_plugin.py

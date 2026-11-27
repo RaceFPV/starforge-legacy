@@ -56,3 +56,8 @@ Pin maps live in `src/config/config.h`. ESP32-C3 SuperMini defaults:
 Do not open a serial monitor while RotorHazard is connected. Text on that port breaks the binary protocol.
 
 A mock server for protocol checks is in `test/tools/`.
+
+The RotorHazard-side flasher plugin now lives in
+[RaceFPV/starforge-plugin](https://github.com/RaceFPV/starforge-plugin) so it can be listed in the
+community plugin database (one plugin per repository). It flashes a bare C5 from the
+timer's own UI.

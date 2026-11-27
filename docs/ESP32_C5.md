@@ -175,6 +175,10 @@ it appears as `/dev/ttyACM0` (`/dev/serial/by-id/usb-Espressif*` is more stable
 when a second board is present) and is added to `GENERAL.SERIAL_PORTS`.
 
 Flashing a board *while RotorHazard is running it* is not supported: the server
-holds the port and the board reboots when it is opened. RotorHazard plugins
+holds the port and the board reboots when it is opened.
+
+A RotorHazard plugin that does this from the timer's own UI - for a spare board,
+never the one being timed - lives in
+[RaceFPV/starforge-plugin](https://github.com/RaceFPV/starforge-plugin). RotorHazard plugins
 cannot do it either on this server - a plugin can register a panel but not ship
 the page behind it, and it has no way to release the port the server owns.

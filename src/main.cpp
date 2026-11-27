@@ -93,7 +93,10 @@ void setup() {
       // "cost per frequency change".
       multiNode.engine().setFrequency(i, kRaceband[0], now);
 #else
-      multiNode.engine().setFrequency(i, kRaceband[i], now);
+      // Seat 0 carries the frequency under test; the rest stay on Raceband so
+      // cross-channel bleed shows up as readings on seats that should be deaf.
+      uint16_t freq = (i == 0) ? (uint16_t)SF_BENCH_SEAT0_MHZ : kRaceband[i];
+      multiNode.engine().setFrequency(i, freq, now);
 #endif
     }
   }

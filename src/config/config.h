@@ -259,6 +259,22 @@
   #define SF_BENCH_SKIP 0
 #endif
 
+// Bench only: pin seat 0 to a chosen frequency (the VTX under test) instead of
+// the Raceband default, and optionally alternate it with a quiet channel so
+// every reading on the VTX frequency is the first sample after a retune.
+#ifndef SF_BENCH_SETTLE_PROBE
+  #define SF_BENCH_SETTLE_PROBE 0
+#endif
+#ifndef SF_BENCH_SEAT0_MHZ
+  #define SF_BENCH_SEAT0_MHZ 5658
+#endif
+#ifndef SF_BENCH_QUIET_MHZ
+  #define SF_BENCH_QUIET_MHZ 5658
+#endif
+#ifndef SF_BENCH_PROBE_MHZ
+  #define SF_BENCH_PROBE_MHZ 5917
+#endif
+
 #ifndef SF_SILENCE_SYSTEM_OUTPUT
   #define SF_SILENCE_SYSTEM_OUTPUT 1
 #endif

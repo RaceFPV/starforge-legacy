@@ -10,6 +10,9 @@ namespace mp {
 
 volatile uint32_t g_sampler_passes = 0;
 volatile uint32_t g_sampler_samples = 0;
+volatile int16_t g_last_raw[kBenchSeats] = {0};
+volatile uint16_t g_last_freq[kBenchSeats] = {0};
+volatile uint32_t g_last_count[kBenchSeats] = {0};
 
 bool C5SeatSampler::begin(RhNode* node) {
     node_ = node;
@@ -35,6 +38,14 @@ void C5SeatSampler::tick() {
         scanned++;
 
         uint16_t freq = node_->engine().frequency(seat);
+#if SF_BENCH_SETTLE_PROBE
+        if (seat == 0) {
+            static bool alternate = false;
+            alternate = !alternate;
+            freq = alternate ? (uint16_t)SF_BENCH_PROBE_MHZ
+                             : (uint16_t)SF_BENCH_QUIET_MHZ;
+        }
+#endif
         SeatFilter& filter = filters_[seat];
         if (freq == 0) {
             filter.started = false;
@@ -57,6 +68,11 @@ void C5SeatSampler::tick() {
         int16_t dbm = -80;
 #else
         int16_t dbm = radio_.readDbm();
+        if (seat < (unsigned)kBenchSeats) {
+            g_last_raw[seat] = dbm;
+            g_last_freq[seat] = freq;
+            ++g_last_count[seat];
+        }
 #endif
 
         if (!filter.started) {

@@ -38,6 +38,9 @@ constexpr uint8_t WRITE_CURNODE_INDEX = 0x7A;
 // Bench only: sampler progress (passes, samples). No RotorHazard host
 // sends this, so it cannot collide with the standard protocol.
 constexpr uint8_t READ_BENCH_COUNTERS = 0x7E;
+// Bench only: one seat's last raw reading. Reply: int16 dBm, uint16 MHz,
+// uint32 sample count. The seat index arrives as the command's data byte.
+constexpr uint8_t READ_BENCH_SAMPLE = 0x7F;
 
 // Payload bytes the host sends with a write (checksum excluded).
 int writePayloadSize(uint8_t command) {
@@ -75,6 +78,7 @@ bool isReadCommand(uint8_t command) {
         case READ_FW_BUILDTIME:
         case READ_FW_PROCTYPE:
         case READ_BENCH_COUNTERS:
+        case READ_BENCH_SAMPLE:
             return true;
         default:
             return false;
@@ -257,6 +261,21 @@ void RhNode::handleRead(uint32_t nowUs) {
             uint32_t ms = nowUs / 1000;
             uint8_t b[4] = {(uint8_t)(ms >> 24), (uint8_t)(ms >> 16), (uint8_t)(ms >> 8), (uint8_t)ms};
             send(b, 4);
+            break;
+        }
+
+        case READ_BENCH_SAMPLE: {
+            unsigned seat = selected_;
+            if (seat >= (unsigned)mp::kBenchSeats) seat = 0;
+            int16_t dbm = mp::g_last_raw[seat];
+            uint16_t mhz = mp::g_last_freq[seat];
+            uint32_t count = mp::g_last_count[seat];
+            uint8_t b[8] = {
+                (uint8_t)((uint16_t)dbm >> 8), (uint8_t)dbm,
+                (uint8_t)(mhz >> 8), (uint8_t)mhz,
+                (uint8_t)(count >> 24), (uint8_t)(count >> 16),
+                (uint8_t)(count >> 8), (uint8_t)count};
+            send(b, 8);
             break;
         }
 

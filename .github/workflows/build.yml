@@ -113,7 +113,7 @@ jobs:
     - name: Create release packages
       run: |
         cd all-firmware
-        for env in esp32-c3-supermini esp32-c3 esp32-c3-zero nuclearcounter esp32-c6 esp32dev esp32dev-2mb esp32-s3 esp32-s3-t-energy esp32-s2; do
+        for env in esp32-c3-supermini esp32-c3 esp32-c3-zero nuclearcounter esp32-c6 esp32dev esp32dev-2mb esp32-s3 esp32-s3-t-energy esp32-s2 esp32-c5 esp32-c5-zero esp32-c5-xiao; do
           if [ -d "firmware-$env" ]; then
             (cd "firmware-$env" && zip -r "../StarForge-${env}.zip" .)
           fi

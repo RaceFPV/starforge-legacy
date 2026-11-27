@@ -163,40 +163,18 @@ esp-sdr, C5VRX or double-ESP-resso was read or used.
 8. Tune `C5_RSSI_DBM_FLOOR`/`CEIL` so the quiet floor reads 10-20 and a close
    pass reaches about 200.
 
-## Flashing from the RotorHazard host (no PC)
+## Preparing a node
 
-A node plugged into a Raspberry Pi can be updated from that Pi. The board is a USB
-CDC device (`/dev/ttyACM0`, or better `/dev/serial/by-id/usb-Espressif*`) and
-`esptool` talks to the C5's ROM bootloader over the same cable the timer uses.
-Addresses: bootloader `0x2000`, partitions `0x8000`, firmware `0x10000`, and
-`nvs` `0x9000` / `spiffs` `0x290000` when those parts ship.
+Flash the board with the StarForge flasher (the desktop app in `flash_tool/`,
+which bundles esptool for macOS, Windows and Linux) before it goes on the timer.
+It already writes the C5 parts to the right addresses: bootloader `0x2000`,
+partitions `0x8000`, app `0x10000`.
 
-**RotorHazard owns the port while it runs**, so anything that flashes must stop
-it first - and the C5 reboots when the port is opened. Three routes, in order of
-how much machinery they add:
+Once flashed, plugging the board into the RotorHazard host is the whole setup -
+it appears as `/dev/ttyACM0` (`/dev/serial/by-id/usb-Espressif*` is more stable
+when a second board is present) and is added to `GENERAL.SERIAL_PORTS`.
 
-1. **`tools/flash_pi.sh`** (recommended, works over SSH):
-
-       tools/flash_pi.sh --firmware ~/StarForge-esp32-c5-xiao
-       tools/flash_pi.sh --build -e esp32-c5-xiao
-       tools/flash_pi.sh --firmware DIR --port /dev/ttyACM0 --service rh-server
-
-   It stops the service, flashes, verifies, restarts the service, and prints the
-   BOOT-button recovery sequence if the automatic reset does not take. Needs
-   esptool 4.8.1 or later (`python3 -m pip install --user esptool`).
-
-2. **A browser flasher** (esptool-js / Web Serial) served by the Pi and opened in
-   Chromium *on the Pi*. It works, but Web Serial also needs exclusive access, so
-   the timer still has to be stopped first. Good for a phone-free workstation,
-   not a hands-off update.
-
-3. **A RotorHazard plugin.** Not recommended as the flasher itself: the plugin
-   bridge cannot stop the server that owns the port, and giving arbitrary
-   flashing privileges to the timing process is a bigger change than the problem
-   deserves. If a button inside RotorHazard is wanted, the clean shape is a small
-   sidecar service that owns stop/flash/start plus a plugin panel that calls it.
-
-Automatic reset over native USB is not always reliable - if the write fails,
-hold BOOT, tap RESET, release BOOT and run the command again. On a C5 in the
-ROM bootloader, `--after watchdog-reset` leaves download mode more reliably
-than `--after hard_reset`; `flash_pi.sh` uses it by default.
+Flashing a board *while RotorHazard is running it* is not supported: the server
+holds the port and the board reboots when it is opened. RotorHazard plugins
+cannot do it either on this server - a plugin can register a panel but not ship
+the page behind it, and it has no way to release the port the server owns.

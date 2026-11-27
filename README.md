@@ -23,7 +23,6 @@ npm start
 
 ## Build
 
-On the RotorHazard host (e.g. a Raspberry Pi) `tools/flash_pi.sh --build -e esp32-c5-xiao` stops the timer, flashes over USB and restarts it; see `docs/ESP32_C5.md`, "Flashing from the RotorHazard host".
 
 
 ```bash

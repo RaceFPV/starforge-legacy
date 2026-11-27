@@ -275,6 +275,18 @@
   #define SF_BENCH_PROBE_MHZ 5917
 #endif
 
+// RX gain held at a fixed index: no AGC, so the reading stays linear as a VTX
+// passes the gate. Index 0 is maximum gain (the front end compresses and every
+// channel reads full strength); higher is less gain. 24 measured best on a
+// 25 mW VTX at gate distance - full signal on the tuned seat, neighbours on the
+// noise floor. 31 is the absolute minimum gain, at the cost of 5 dB of signal.
+// Only meaningful for the hopping multi-pilot receiver.
+#if SF_SEAT_COUNT > 1
+  #ifndef C5_RX_GAIN_INDEX
+    #define C5_RX_GAIN_INDEX 24
+  #endif
+#endif
+
 #ifndef SF_SILENCE_SYSTEM_OUTPUT
   #define SF_SILENCE_SYSTEM_OUTPUT 1
 #endif

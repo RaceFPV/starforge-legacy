@@ -31,6 +31,10 @@ void phy_restart_cal(void);
 void phy_i2c_sdm_en(uint8_t is5g);
 void phy_ckgen_5g_cal(uint32_t mhz);
 void phy_freq_mem_change_5g_(void* sdm);
+// Forced RX gain register: bits 24-31 hold the index, bit 23 forces it. A
+// nearby VTX otherwise drives the AGC and the front end compresses, which is
+// what puts full-strength readings on channels far from the carrier.
+constexpr uintptr_t kGainReg = 0x600A702C;
 void phy_param_track_tot(bool wifi_track, bool ble_track);
 }
 
@@ -128,6 +132,24 @@ bool C5HopRadio::begin() {
     phy_check_sigrssi_en(true);
     lastWifiChannel_ = -1;
     ready_ = true;
+    // Hold the RX gain at a fixed index. Free AGC tracks the strongest signal
+    // in the room, so a VTX passing the gate pumps the front end and the level
+    // stops being linear - which is what puts full-strength readings on
+    // channels far from the carrier. Written once here: rewriting the force
+    // while it already holds disturbs the receiver.
+    //
+    // Measured on a 25 mW VTX at gate distance (8 seats): index 24 keeps the
+    // tuned seat at -49 dBm and puts the neighbouring channel back on the noise
+    // floor at -64 (15 dB separation), against 11 dB with AGC free. Index 31 is
+    // the absolute minimum gain and costs 5 dB of signal for no extra
+    // separation.
+    volatile uint32_t* gain_reg = reinterpret_cast<volatile uint32_t*>(kGainReg);
+    uint32_t gain_value = *gain_reg;
+    gain_value &= ~(0xFFu << 24);
+    gain_value &= ~(1u << 23);
+    gain_value |= (uint32_t(C5_RX_GAIN_INDEX) << 24);
+    gain_value |= (1u << 23);
+    *gain_reg = gain_value;
     return true;
 }
 

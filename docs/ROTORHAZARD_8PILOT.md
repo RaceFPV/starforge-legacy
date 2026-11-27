@@ -306,7 +306,36 @@ The rate is measured on the board, not inferred from the host:
 for attribution: skipping the retune takes the sampler from ~1 kHz to ~12 kHz,
 which is how the table above was attributed. Both are 0 in every real build.
 
-### 5.2 What is still unmeasured
+### 5.2 Fixed RX gain, no AGC
+
+The receiver runs with the RX gain held at a fixed index (`C5_RX_GAIN_INDEX`,
+default 24) rather than under AGC. Free AGC tracks whatever is strongest in the
+room, so a VTX passing the gate pumps the front end: the level stops being
+linear, and full-strength readings appear on channels far from the carrier.
+
+Measured with a 25 mW VTX at gate distance (8 seats, C5HR8), comparing the seat
+tuned to the carrier with the neighbour 105 MHz below it:
+
+| gain index | carrier seat | neighbour | separation |
+|---|---|---|---|
+| AGC free | -53 dBm | -64 dBm | 11 dB |
+| 0 (max gain) | -40 | -40 | 0 dB |
+| 12 | -49 | -52 | 3 dB |
+| 16 | -49 | -56 | 7 dB |
+| 20 | -49 | -60 | 11 dB |
+| **24 (default)** | **-49** | **-64** | **15 dB** |
+| 31 (absolute minimum) | -54 | -66 | 12 dB |
+
+Index 0 is maximum gain and compresses so hard that every seat reads the
+carrier; index 24 keeps the tuned seat at full strength and puts the neighbour
+back on the noise floor, which is better separation than AGC achieved. Index 31
+is the absolute minimum gain and costs 5 dB of signal without buying separation.
+
+The force is written once at start-up. Rewriting it while it already holds
+disturbs the receiver (the reference documents the same), so nothing in the
+sampler touches it.
+
+### 5.3 What is still unmeasured
 
 - **The reading immediately after a hop.** A 15 us settle is well inside the
   window where a PLL is still locking. The burst filter is designed to reject

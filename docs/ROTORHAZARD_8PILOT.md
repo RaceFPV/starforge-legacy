@@ -335,6 +335,14 @@ The force is written once at start-up. Rewriting it while it already holds
 disturbs the receiver (the reference documents the same), so nothing in the
 sampler touches it.
 
+**The reduced sensitivity is the point, not a side effect.** Only a quad passing
+the gate should register; a quad flying on the far side of the course should not.
+Pinning the gain pushes distant transmitters down towards the noise floor while a
+crossing stays well above it (-54 dBm against -66 at index 31, -49 against -64 at
+the shipped index 24), so do not "restore sensitivity" as a fix - that is what
+lets distant quads leak into the timing. Set enter/exit thresholds at gate
+distance for the same reason.
+
 ### 5.3 What is still unmeasured
 
 - **The reading immediately after a hop.** A 15 us settle is well inside the

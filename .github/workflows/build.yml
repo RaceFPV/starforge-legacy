@@ -26,6 +26,9 @@ jobs:
           - esp32-s3
           - esp32-s3-t-energy
           - esp32-s2
+          - esp32-c5
+          - esp32-c5-zero
+          - esp32-c5-xiao
 
     steps:
     - name: Checkout code
@@ -64,8 +67,9 @@ jobs:
         cp .pio/build/${{ matrix.environment }}/partitions.bin artifacts/${{ matrix.environment }}/
 
         case "${{ matrix.environment }}" in
-          esp32dev|esp32dev-2mb|esp32-s2) BOOT=0x1000 ;;
-          *) BOOT=0x0 ;;
+          esp32dev|esp32dev-2mb|esp32-s2) BOOT=0x1000 ; CHIP=auto ;;
+          esp32-c5|esp32-c5-zero|esp32-c5-xiao) BOOT=0x2000 ; CHIP=esp32c5 ;;
+          *) BOOT=0x0 ; CHIP=auto ;;
         esac
         cat > artifacts/${{ matrix.environment }}/FLASH_INSTRUCTIONS.txt << EOF
         StarForge Legacy firmware - ${{ matrix.environment }}
@@ -73,7 +77,7 @@ jobs:
 
         Flash using esptool.py:
         -----------------------
-        esptool.py --chip auto --port /dev/ttyUSB0 --baud 921600 write_flash \\
+        esptool.py --chip ${CHIP} --port /dev/ttyUSB0 --baud 921600 write_flash \\
           ${BOOT} bootloader.bin \\
           0x8000 partitions.bin \\
           0x10000 firmware.bin

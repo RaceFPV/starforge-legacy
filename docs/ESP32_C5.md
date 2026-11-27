@@ -14,6 +14,7 @@ See [Bench checklist](#bench-checklist) before racing on it.
 |---|---|---|
 | `esp32-c5` | Espressif ESP32-C5-DevKitC-1 | Use the native **USB** port, not the UART port. RGB LED on GPIO27. |
 | `esp32-c5-zero` | Waveshare ESP32-C5-Zero | Onboard antenna by default; build with `-DC5_ANT_EXTERNAL=1` for the IPEX connector (GPIO26). RGB LED on GPIO27. |
+| `esp32-c5-xiao` | Seeed Studio XIAO ESP32-C5 | Native USB-C, 8 MB flash. **Fit the u.FL antenna** (the board is deaf without it); a 5.8 GHz antenna beats the bundled dual-band one for our use. Plain LED on GPIO27 (no WS2812). |
 
 ```bash
 pio run -e esp32-c5-zero --target upload
@@ -161,3 +162,41 @@ esp-sdr, C5VRX or double-ESP-resso was read or used.
    times.
 8. Tune `C5_RSSI_DBM_FLOOR`/`CEIL` so the quiet floor reads 10-20 and a close
    pass reaches about 200.
+
+## Flashing from the RotorHazard host (no PC)
+
+A node plugged into a Raspberry Pi can be updated from that Pi. The board is a USB
+CDC device (`/dev/ttyACM0`, or better `/dev/serial/by-id/usb-Espressif*`) and
+`esptool` talks to the C5's ROM bootloader over the same cable the timer uses.
+Addresses: bootloader `0x2000`, partitions `0x8000`, firmware `0x10000`, and
+`nvs` `0x9000` / `spiffs` `0x290000` when those parts ship.
+
+**RotorHazard owns the port while it runs**, so anything that flashes must stop
+it first - and the C5 reboots when the port is opened. Three routes, in order of
+how much machinery they add:
+
+1. **`tools/flash_pi.sh`** (recommended, works over SSH):
+
+       tools/flash_pi.sh --firmware ~/StarForge-esp32-c5-xiao
+       tools/flash_pi.sh --build -e esp32-c5-xiao
+       tools/flash_pi.sh --firmware DIR --port /dev/ttyACM0 --service rh-server
+
+   It stops the service, flashes, verifies, restarts the service, and prints the
+   BOOT-button recovery sequence if the automatic reset does not take. Needs
+   esptool 4.8.1 or later (`python3 -m pip install --user esptool`).
+
+2. **A browser flasher** (esptool-js / Web Serial) served by the Pi and opened in
+   Chromium *on the Pi*. It works, but Web Serial also needs exclusive access, so
+   the timer still has to be stopped first. Good for a phone-free workstation,
+   not a hands-off update.
+
+3. **A RotorHazard plugin.** Not recommended as the flasher itself: the plugin
+   bridge cannot stop the server that owns the port, and giving arbitrary
+   flashing privileges to the timing process is a bigger change than the problem
+   deserves. If a button inside RotorHazard is wanted, the clean shape is a small
+   sidecar service that owns stop/flash/start plus a plugin panel that calls it.
+
+Automatic reset over native USB is not always reliable - if the write fails,
+hold BOOT, tap RESET, release BOOT and run the command again. On a C5 in the
+ROM bootloader, `--after watchdog-reset` leaves download mode more reliably
+than `--after hard_reset`; `flash_pi.sh` uses it by default.

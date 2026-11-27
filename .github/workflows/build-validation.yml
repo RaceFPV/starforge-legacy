@@ -28,6 +28,9 @@ jobs:
           - esp32-s3
           - esp32-s3-t-energy
           - esp32-s2
+          - esp32-c5
+          - esp32-c5-zero
+          - esp32-c5-xiao
 
     steps:
     - name: Checkout code

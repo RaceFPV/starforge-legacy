@@ -20,8 +20,14 @@
     #define RX5808_SEL_PIN      6     // GPIO6 - LE (external RX5808 only)
     #define USE_DMA_ADC         1
     #define UART_BAUD_RATE      921600  // USB CDC ignores this, but set for compatibility
-    #define STATUS_LED_PIN      27    // GPIO27 - WS2812 RGB LED (DevKitC-1 and C5-Zero)
-    #define STATUS_LED_WS2812   1
+    // GPIO27 on the DevKitC-1 and the C5-Zero is an RGB (WS2812) LED; on the
+    // XIAO it is a plain LED, so that environment overrides the style.
+    #ifndef STATUS_LED_PIN
+        #define STATUS_LED_PIN      27
+    #endif
+    #ifndef STATUS_LED_WS2812
+        #define STATUS_LED_WS2812   1
+    #endif
     #define STATUS_LED_INVERTED 0
     #define RSSI_HISTORY_SIZE   10000  // 10,000 samples = ~3.3 minutes @ 50Hz (50 KB); Wi-Fi uses the rest
     #if defined(BOARD_ESP32_C5_ZERO)

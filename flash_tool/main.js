@@ -91,6 +91,17 @@ const BOARD_CONFIGS = {
       spiffs: '0x290000'
     }
   },
+  'esp32-c5-xiao': {
+    name: 'Seeed XIAO ESP32-C5 (built-in receiver, no RX5808)',
+    chip: 'esp32c5',
+    flashAddresses: {
+      bootloader: '0x2000',
+      partitions: '0x8000',
+      nvs: '0x9000',
+      firmware: '0x10000',
+      spiffs: '0x290000'
+    }
+  },
   'esp32dev': {
     name: 'ESP32 Dev Module (4MB)',
     chip: 'esp32',
@@ -1283,7 +1294,8 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       'esp32-s3-t-energy': 'esp32-s3-t-energy',
       'esp32-s2': 'esp32-s2',
       'esp32-c5': 'esp32-c5',
-      'esp32-c5-zero': 'esp32-c5-zero'
+      'esp32-c5-zero': 'esp32-c5-zero',
+      'esp32-c5-xiao': 'esp32-c5-xiao'
     };
     
     const envName = envMap[boardType];

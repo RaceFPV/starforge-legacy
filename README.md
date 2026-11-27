@@ -23,6 +23,9 @@ npm start
 
 ## Build
 
+On the RotorHazard host (e.g. a Raspberry Pi) `tools/flash_pi.sh --build -e esp32-c5-xiao` stops the timer, flashes over USB and restarts it; see `docs/ESP32_C5.md`, "Flashing from the RotorHazard host".
+
+
 ```bash
 pio run -e esp32-c3-supermini
 pio run -e esp32-c3-supermini --target upload
@@ -30,9 +33,9 @@ pio run -e esp32-c3-supermini --target upload
 
 GitHub Actions builds every board when a release is published, and checks that the firmware compiles on pull requests.
 
-Other environments: `esp32-c3`, `esp32-c3-zero`, `esp32-c6`, `esp32dev`, `esp32dev-2mb`, `esp32-s3`, `esp32-s3-t-energy`, `esp32-s2`, `nuclearcounter`, `esp32-c5`, `esp32-c5-zero`.
+Other environments: `esp32-c3`, `esp32-c3-zero`, `esp32-c6`, `esp32dev`, `esp32dev-2mb`, `esp32-s3`, `esp32-s3-t-energy`, `esp32-s2`, `nuclearcounter`, `esp32-c5`, `esp32-c5-zero`, `esp32-c5-xiao`.
 
-The `esp32-c5` and `esp32-c5-zero` builds have no RX5808 pins: the C5 receives the VTX itself. See [docs/ESP32_C5.md](docs/ESP32_C5.md).
+The `esp32-c5`, `esp32-c5-zero` and `esp32-c5-xiao` builds have no RX5808 pins: the C5 receives the VTX itself. See [docs/ESP32_C5.md](docs/ESP32_C5.md).
 
 Host unit tests: `bash test/unit/run.sh` (needs g++).
 

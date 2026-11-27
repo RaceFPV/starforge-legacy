@@ -1,0 +1,9 @@
+{
+  "domain": "starforge_flasher",
+  "name": "StarForge Flasher",
+  "author": "RaceFPV LLC",
+  "description": "Flashes a bare ESP32-C5 StarForge node over USB from the RotorHazard UI",
+  "license": "RaceFPV LLC - all rights reserved",
+  "version": "1.0.0",
+  "required_rhapi_version": "1.7"
+}

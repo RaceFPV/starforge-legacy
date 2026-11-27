@@ -1,3 +1,4 @@
+#include "multipilot/bench_counters.h"
 #include "multipilot/rh_node.h"
 
 #include <stdio.h>
@@ -34,6 +35,9 @@ constexpr uint8_t WRITE_EXIT_AT_LEVEL = 0x72;
 constexpr uint8_t SEND_STATUS_MESSAGE = 0x75;
 constexpr uint8_t FORCE_END_CROSSING = 0x78;
 constexpr uint8_t WRITE_CURNODE_INDEX = 0x7A;
+// Bench only: sampler progress (passes, samples). No RotorHazard host
+// sends this, so it cannot collide with the standard protocol.
+constexpr uint8_t READ_BENCH_COUNTERS = 0x7E;
 
 // Payload bytes the host sends with a write (checksum excluded).
 int writePayloadSize(uint8_t command) {
@@ -70,6 +74,7 @@ bool isReadCommand(uint8_t command) {
         case READ_FW_BUILDDATE:
         case READ_FW_BUILDTIME:
         case READ_FW_PROCTYPE:
+        case READ_BENCH_COUNTERS:
             return true;
         default:
             return false;
@@ -252,6 +257,18 @@ void RhNode::handleRead(uint32_t nowUs) {
             uint32_t ms = nowUs / 1000;
             uint8_t b[4] = {(uint8_t)(ms >> 24), (uint8_t)(ms >> 16), (uint8_t)(ms >> 8), (uint8_t)ms};
             send(b, 4);
+            break;
+        }
+
+        case READ_BENCH_COUNTERS: {
+            uint32_t passes = mp::g_sampler_passes;
+            uint32_t samples = mp::g_sampler_samples;
+            uint8_t b[8] = {
+                (uint8_t)(passes >> 24), (uint8_t)(passes >> 16),
+                (uint8_t)(passes >> 8), (uint8_t)passes,
+                (uint8_t)(samples >> 24), (uint8_t)(samples >> 16),
+                (uint8_t)(samples >> 8), (uint8_t)samples};
+            send(b, 8);
             break;
         }
 

@@ -214,13 +214,34 @@
   #error "SF_SEAT_COUNT > 1 needs the native ESP32-C5 receiver (SF_RECEIVER_C5_NATIVE=1)"
 #endif
 #if SF_SEAT_COUNT > 1
-  // Readings are ignored for this long after a retune. Eight pilots on one C5
-  // at roughly 1 kHz per seat is established, working practice (RotorHazard
-  // team + the reference receiver), which puts the usable retune budget around
-  // 125 us per seat. 150 leaves a little margin. Measure it on the bench and
-  // tune from here - see docs/ROTORHAZARD_8PILOT.md phase 0.
+  // Readings are ignored for this long after a retune. The budget is ~125 us
+  // per seat at 1 kHz. Measured on a C5HR8 with the staged hop (C5_FAST_HOP=3,
+  // C5_HOP_SKIP=0): a pass with no settle runs at 1172 Hz/seat, so this settle
+  // costs 8 x 15 us and lands at about 1 kHz. Skipping both calibration stages
+  // (C5_HOP_SKIP=3) buys 1749 Hz/seat if the RF spikes prove acceptable.
+  // Numbers and the measuring method: docs/ROTORHAZARD_8PILOT.md.
   #ifndef C5_HOP_SETTLE_US
-    #define C5_HOP_SETTLE_US       150
+    #define C5_HOP_SETTLE_US       15
+  #endif
+  // Retune path. The driver call (esp_wifi_set_channel) costs about a
+  // millisecond, and eight race channels map to eight different Wi-Fi
+  // channels, so it fires on every hop and caps the sampler at ~75 Hz/seat.
+  // 0 = driver channel call + RFChannelSel (original, ~74 Hz/seat)
+  // 1 = RFChannelSel only, driver parked (~137 Hz/seat)
+  // 2 = phy_set_rf_freq_offset only, the synthesizer retune (~1 kHz/seat)
+  // Measured on a C5HR8 at 8 seats; see docs/ROTORHAZARD_8PILOT.md.
+  #ifndef C5_FAST_HOP
+    #define C5_FAST_HOP            3
+  #endif
+  // Signal-RSSI mode used to have to be re-armed after a driver channel change;
+  // with the PHY-only path it survives, and the call is not free.
+  // With C5_FAST_HOP=3: bit 0 skips the 5G clock calibration, bit 1 skips the
+  // frequency-memory update. 3 = fastest, 0 = same work as a full retune.
+  #ifndef C5_HOP_SKIP
+    #define C5_HOP_SKIP            0
+  #endif
+  #ifndef C5_SIGRSSI_EACH_HOP
+    #define C5_SIGRSSI_EACH_HOP    0
   #endif
   // The burst filter windows are in samples of one seat now, not milliseconds.
   #ifndef C5_MP_FILTER_OPEN
@@ -232,6 +253,12 @@
 #endif
 
 // Keep system log text off the RotorHazard serial link (src/system/serial_guard.*).
+// Bench only: skip parts of the per-seat path to attribute sampler time.
+// 1 = retune, 2 = RSSI read, 4 = engine sample, 8 = filters. 0 in every real build.
+#ifndef SF_BENCH_SKIP
+  #define SF_BENCH_SKIP 0
+#endif
+
 #ifndef SF_SILENCE_SYSTEM_OUTPUT
   #define SF_SILENCE_SYSTEM_OUTPUT 1
 #endif

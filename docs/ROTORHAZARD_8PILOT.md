@@ -1,6 +1,9 @@
 # 8-pilot mode: one ESP32-C5 as eight RotorHazard nodes
 
-Status: **implemented and host-tested; bench validation outstanding.** Target
+Status: **implemented, host-tested, and measured at 1019 readings/s per seat on
+hardware** (8 seats, C5HR8 module). Still outstanding: RF validation with real
+VTX signals - cross-channel bleed, the reading just after a hop, and lap
+accuracy against video. Target
 firmware: StarForge Legacy 2.1.0 (C5 native builds). Reference server:
 RotorHazard Rust `rh-server-rust-v4.6.0-dev.5` (the protocol is identical in the
 Python server).
@@ -245,36 +248,71 @@ Other rules:
   belongs in the bench checklist.
 - `min lap time` per seat, default 0 (server enforces its own minimum).
 
-## 5. The hard constraint: 15 ms settle versus eight seats
+## 5. The retune budget: measured, not guessed
 
-The single-seat receiver uses `C5_SETTLE_MS` **15 ms**, and eight seats at that
-budget would be 120 ms per sweep — eight samples per second per seat, which
-cannot time a gate pass. That constant belongs to the slow path (park the Wi-Fi
-driver, then `RFChannelSel`, then a tracking pass) and must not be reused here.
+The single-seat receiver uses `C5_SETTLE_MS` **15 ms** - park the Wi-Fi driver,
+`RFChannelSel`, a tracking pass. That belongs to the slow path and must not be
+reused here: eight seats at that budget would be 120 ms per sweep.
 
-Eight pilots at ~1 kHz per seat is established practice, so the retune budget is
-~125 µs per seat: a PLL retune, a short settle, one reading, next seat. The
-`c5_hop_radio` path therefore skips the driver call whenever the nearest Wi-Fi
-channel is unchanged. Tune `C5_HOP_SETTLE_US` (default 150 µs) from a
-measurement, not a guess:
+Eight pilots at ~1 kHz per seat needs ~125 us per seat. Measured on a C5HR8
+module (8 MB PSRAM, 8 MB flash) with the sampler counters of §5.1, eight seats
+tuned to Raceband R1-R8:
 
-1. On hardware, log `phy_get_sigrssi()` at ~10 µs resolution for 20 ms after
-   `RFChannelSel` and after a `esp_wifi_set_channel` hop, at several channels
-   (R1, R4, R8, E6). Find the time until the reading is within **1 count** of
-   its steady value.
-2. Split the path: a hop that stays inside the current Wi-Fi channel (offset
-  ≤ tolerance) is cheap; an `RFChannelSel` hop is the expensive one. Most race
-   channels are not on a Wi-Fi centre (R2/R3/R5/R6, F1/F3, E…), so assume the
-   expensive path for the schedule.
-3. Set `C5_HOP_SETTLE_MS` / `C5_HOP_SETTLE_US` from the measurement and record
-   the resulting sweep time in the bench notes. If the settle cannot be brought
-   under ~400 µs, the design needs a two-tier schedule: sample all seats
-   coarsely (e.g. 50 Hz) and dwell on any seat whose reading is within 15 counts
-   of `enterAt` (a "hot" seat gets 2–3 ms of consecutive samples). Document
-   whichever is chosen.
+| retune path | settle | per seat |
+|---|---|---|
+| `esp_wifi_set_channel` + `RFChannelSel` (original) | 150 us | 74 Hz |
+| `RFChannelSel` only (`C5_FAST_HOP=1`) | 150 us | 137 Hz |
+| `RFChannelSel` only | 0 | 164 Hz |
+| `phy_set_rf_freq_offset` (`C5_FAST_HOP=2`) | 0 | 306 Hz |
+| staged hop, all stages (`C5_FAST_HOP=3`, `C5_HOP_SKIP=0`) | 0 | 1172 Hz |
+| staged hop, 5G clock cal skipped (`C5_HOP_SKIP=1`) | 0 | 1539 Hz |
+| staged hop, frequency-memory update skipped (`C5_HOP_SKIP=2`) | 0 | 1289 Hz |
+| staged hop, both skipped (`C5_HOP_SKIP=3`) | 0 | 1749 Hz |
+| **shipped default** (all stages) | 15 us | **1019 Hz** |
+| staged hop, both skipped | 20 us | 1353 Hz |
 
-Do not reduce `C5_SETTLE_MS` for the single-seat build as part of this work;
-the 8-pilot path gets its own constant so single-seat timing cannot regress.
+What the numbers establish:
+
+- **The driver call was half the cost.** `esp_wifi_set_channel` runs on every hop
+  in a Raceband schedule (each race channel maps to a different Wi-Fi channel),
+  so the "skip it when the channel is unchanged" optimisation almost never
+  fired. Park the driver and retune at the PHY.
+- **A full PHY channel change is still too slow.** `RFChannelSel` costs ~700 us
+  and `phy_set_rf_freq_offset` ~400 us; both are flat per call, unaffected by
+  frequency delta or promiscuous mode.
+- **Splitting the retune into stages is what fits the budget.** The staged path
+  (`C5_FAST_HOP=3`) runs the PLL set, the SDM write and the I2C frequency write,
+  then the restart and the 5G SDM enable - and optionally the two calibration
+  stages. With every stage kept it already reaches 1172 Hz/seat.
+- **The settle is now a real cost, not a guess.** A pass with no settle is 853 us;
+  8 x 15 us puts the shipped build at 1019 Hz. `C5_HOP_SKIP=3` buys enough
+  headroom to run a 20 us settle at 1353 Hz if the RF spikes prove acceptable.
+- The remaining per-seat cost is the staged retune itself (~107 us). The RSSI
+  read, the burst/Kalman filters and the engine's crossing detection are free -
+  skipping any of them changes nothing measurable.
+
+### 5.1 Measuring the rate on hardware
+
+The rate is measured on the board, not inferred from the host:
+
+- Build with `-DSF_BENCH_SELF_TUNE=1`, which gives every seat a Raceband channel
+  at boot so the sampler runs at full rate with no host attached.
+- Command **0x7E** returns 8 bytes: 32-bit sampler passes, then 32-bit seat
+  samples. Nothing in RotorHazard sends it, so it cannot collide.
+- Read it twice a few seconds apart; `samples / elapsed / 8` is the per-seat
+  rate. The bench scripts in the session notes do exactly this.
+
+`SF_BENCH_SKIP` (bit 1 retune, 2 RSSI read, 4 engine sample, 8 filters) exists
+for attribution: skipping the retune takes the sampler from ~1 kHz to ~12 kHz,
+which is how the table above was attributed. Both are 0 in every real build.
+
+### 5.2 What is still unmeasured
+
+- **The reading immediately after a hop.** A 15 us settle is well inside the
+  window where a PLL is still locking. The burst filter is designed to reject
+  that sample, but this needs a VTX and a scope to confirm, not a counter.
+- **Cross-channel bleed** with eight live VTX signals.
+- **Lap accuracy against video**, which is the number that matters for racing.
 
 ## 6. Serial behaviour
 
@@ -371,7 +409,7 @@ release, with no hardware attached.
 
 | Phase | Work | Exit criterion |
 |---|---|---|
-| P0 | Bench-measure settle time and hop cost (§5) | **open** — `C5_HOP_SETTLE_US` is 500 µs, a placeholder |
+| P0 | Bench-measure settle time and hop cost (§5) | **done** — 1019 Hz/seat shipped; staged hop, 15 µs settle (§5) |
 | P1 | Seat struct + sampler refactor, single seat unchanged | **done** — unit tests pass, non-C5 builds unchanged |
 | P2 | Multi-node protocol, slot routing, `0x7A` echo | **done** — conformance shows 8 nodes discovered and programmed |
 | P3 | API 36 `0x04`, disabled seats, warning path | **done** — server silent on a good frequency, warns on 5000 MHz |
@@ -383,7 +421,7 @@ C3/C6/S2/S3 builds.
 
 ## 11. Provenance
 
-The behaviour in §5 (a PLL retune is settled after ~300 µs) and the rejection
+The staged retune in §5 and the rejection
 rules in §4.3 are facts taken from the published notes of the FPVGate C5MK
 project, which is CC BY-NC-SA 4.0. No code from it is used here: this
 implementation was written for StarForge from the protocol and those published

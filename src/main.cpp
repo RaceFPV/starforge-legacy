@@ -80,6 +80,25 @@ void setup() {
   multiNode.setIdentity(SF_FW_VERSION, "ESP32-C5", __DATE__, __TIME__);
   sampler.begin(&multiNode);
 
+#if SF_BENCH_SELF_TUNE
+  // Bench build: give every seat a Raceband channel so the sampler runs at full
+  // rate with no host attached, then read the counters with command 0x7E.
+  {
+    static const uint16_t kRaceband[8] = {5658, 5695, 5732, 5769,
+                                          5806, 5843, 5880, 5917};
+    uint32_t now = (uint32_t)esp_timer_get_time();
+    for (unsigned i = 0; i < SF_SEAT_COUNT && i < 8; ++i) {
+#if SF_BENCH_SELF_TUNE == 2
+      // Same frequency on every seat: separates "cost per retune" from
+      // "cost per frequency change".
+      multiNode.engine().setFrequency(i, kRaceband[0], now);
+#else
+      multiNode.engine().setFrequency(i, kRaceband[i], now);
+#endif
+    }
+  }
+#endif
+
 #if defined(STATUS_LED_PIN)
   statusLed.init(STATUS_LED_PIN, STATUS_LED_INVERTED);
 #if defined(STATUS_LED_WS2812) && STATUS_LED_WS2812

@@ -331,12 +331,13 @@ void RhNode::handleWrite(uint32_t nowUs) {
         case WRITE_CURNODE_INDEX: {
             uint8_t slot = payload_[0];
             if (slot < engine_.seats()) selected_ = slot;
-            // The host reads the slot back and compares; an out-of-range slot
-            // must answer with the current one so it retries instead of
-            // silently reading the wrong seat. This reply is exactly two bytes
-            // (slot, checksum) - not payload-plus-checksum like a read.
-            uint8_t echo[2] = {(uint8_t)selected_, (uint8_t)selected_};
-            if (write_) write_(writeCtx_, echo, 2);
+            // No reply. RotorHazard's write_block never reads one - it writes
+            // and moves on - so answering here leaves two bytes in the host's
+            // input buffer and every later read comes back shifted (the Python
+            // server then fails with "Unable to read frequency value"). The
+            // host confirms the switch with READ_CURNODE_INDEX instead, and an
+            // out-of-range slot answers with the current one so it retries
+            // rather than silently reading the wrong seat.
             break;
         }
 

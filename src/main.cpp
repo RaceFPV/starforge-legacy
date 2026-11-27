@@ -80,9 +80,12 @@ void setup() {
   multiNode.setIdentity(SF_FW_VERSION, "ESP32-C5", __DATE__, __TIME__);
   sampler.begin(&multiNode);
 
-#if SF_BENCH_SELF_TUNE
-  // Bench build: give every seat a Raceband channel so the sampler runs at full
-  // rate with no host attached, then read the counters with command 0x7E.
+  // Give every seat a Raceband channel at start-up. RotorHazard's node init
+  // reads READ_FREQUENCY and refuses a node that answers 0 ("Unable to read
+  // frequency value"), so a board that has never been configured would never
+  // enumerate at all. It also means a board with no host attached still reports
+  // live levels on sensible channels. The host overwrites these from its
+  // profile as soon as it starts.
   {
     static const uint16_t kRaceband[8] = {5658, 5695, 5732, 5769,
                                           5806, 5843, 5880, 5917};
@@ -92,15 +95,16 @@ void setup() {
       // Same frequency on every seat: separates "cost per retune" from
       // "cost per frequency change".
       multiNode.engine().setFrequency(i, kRaceband[0], now);
-#else
-      // Seat 0 carries the frequency under test; the rest stay on Raceband so
-      // cross-channel bleed shows up as readings on seats that should be deaf.
+#elif SF_BENCH_SELF_TUNE
+      // Bench: seat 0 carries the frequency under test, the rest stay on
+      // Raceband so cross-channel bleed shows up on seats that should be deaf.
       uint16_t freq = (i == 0) ? (uint16_t)SF_BENCH_SEAT0_MHZ : kRaceband[i];
       multiNode.engine().setFrequency(i, freq, now);
+#else
+      multiNode.engine().setFrequency(i, kRaceband[i], now);
 #endif
     }
   }
-#endif
 
 #if defined(STATUS_LED_PIN)
   statusLed.init(STATUS_LED_PIN, STATUS_LED_INVERTED);

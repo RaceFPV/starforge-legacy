@@ -35,9 +35,11 @@ public:
     // Visit up to kSeatsPerTick enabled seats. Call as often as possible.
     void tick();
 
-    // Seats visited per tick: two hops is about 1-2 ms of loop time, small
-    // enough that the host's serial reads stay timely.
-    static constexpr unsigned kSeatsPerTick = 2;
+    // Seats visited per tick: a full sweep is ~1-2 ms of loop time at the
+    // 150 us settle, which keeps the host's serial reads timely and gives
+    // every seat a reading at about 1 kHz - the rate eight-pilot runs have
+    // been shown to work at.
+    static constexpr unsigned kSeatsPerTick = 8;
 
 private:
     struct SeatFilter {

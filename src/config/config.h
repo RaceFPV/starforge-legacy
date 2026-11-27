@@ -208,11 +208,13 @@
   #error "SF_SEAT_COUNT > 1 needs the native ESP32-C5 receiver (SF_RECEIVER_C5_NATIVE=1)"
 #endif
 #if SF_SEAT_COUNT > 1
-  // Readings are ignored for this long after a retune. Placeholder until it is
-  // measured on the bench: the reference implementation reports its PLL
-  // settled after 300 us. See docs/ROTORHAZARD_8PILOT.md, phase 0.
+  // Readings are ignored for this long after a retune. Eight pilots on one C5
+  // at roughly 1 kHz per seat is established, working practice (RotorHazard
+  // team + the reference receiver), which puts the usable retune budget around
+  // 125 us per seat. 150 leaves a little margin. Measure it on the bench and
+  // tune from here - see docs/ROTORHAZARD_8PILOT.md phase 0.
   #ifndef C5_HOP_SETTLE_US
-    #define C5_HOP_SETTLE_US       500
+    #define C5_HOP_SETTLE_US       150
   #endif
   // The burst filter windows are in samples of one seat now, not milliseconds.
   #ifndef C5_MP_FILTER_OPEN

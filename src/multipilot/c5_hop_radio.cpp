@@ -73,6 +73,7 @@ bool C5HopRadio::begin() {
     if (esp_wifi_set_promiscuous(true) != ESP_OK) return false;
 
     phy_check_sigrssi_en(true);
+    lastWifiChannel_ = -1;
     ready_ = true;
     return true;
 }
@@ -80,11 +81,16 @@ bool C5HopRadio::begin() {
 bool C5HopRadio::hop(uint16_t mhz) {
     if (!ready_) return false;
     // Park the driver's own idea of the channel near the target, then move the
-    // PHY onto the exact frequency. The driver's state only matters if
-    // something else in the system consults it; the RX path follows the PHY.
+    // PHY onto the exact frequency. The RX path follows the PHY, so the driver
+    // call is only needed when the nearest channel actually changes - two seats
+    // often share one, and at a 150 us budget a driver call per hop is the
+    // difference between ~1 kHz per seat and half of it.
     int16_t offset = 0;
     uint8_t ch = nearestWifiChannel(mhz, &offset);
-    esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+    if ((int)ch != lastWifiChannel_) {
+        esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+        lastWifiChannel_ = ch;
+    }
     if (abs(offset) > C5_WIFI_TUNE_TOLERANCE_MHZ) {
         RFChannelSel((int)mhz, 0);
     }

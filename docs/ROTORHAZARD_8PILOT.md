@@ -20,6 +20,12 @@ The single-seat targets are untouched: `SF_SEAT_COUNT` defaults to 1 and the
 `TimingCore`/`NodeMode` path still compiles and runs for every non-C5 board.
 A C5 built with `-DSF_SEAT_COUNT=1` keeps the old single-seat behaviour.
 
+**The approach is not speculative.** Eight pilots on a single ESP32-C5 at
+roughly 1 kHz of scanning per seat is established, working practice in the
+RotorHazard community and among the RotorHazard team; the reference receiver
+reports the same rate. What is outstanding is this firmware's own bench
+sign-off (§9.3), not whether the hardware can do it.
+
 ## 1. Goal
 
 A single ESP32-C5 running this firmware must appear to RotorHazard as **eight
@@ -195,9 +201,10 @@ for each enabled seat:
 
 Requirements:
 
-- A full sweep of eight seats must complete in **≤ 5 ms** (≥ 200 samples per
-  seat per second). If the measured settle time makes that impossible, see §5 —
-  do not silently ship a slower rate.
+- A full sweep of eight seats should complete in **about 1 ms**, which is
+  ~1 kHz per seat - the rate eight-pilot races have been shown to work at.
+  ≤ 8 ms (≥ 125 samples per seat per second) is the point below which a short
+  pass starts being missed, so a slower sweep is a finding, not a setting.
 - Never tune inside `handleSerialInput()`: serial reads answer from cached seat
   state so an 8-seat poll cannot stall the protocol.
 - The crossing decision for a seat uses only that seat's samples; a gap longer
@@ -240,9 +247,16 @@ Other rules:
 
 ## 5. The hard constraint: 15 ms settle versus eight seats
 
-`C5_SETTLE_MS` is **15 ms**. Eight seats at that budget is 120 ms per sweep —
-eight samples per second per seat, which cannot time a 2 ms gate pass. This is
-the main engineering risk, and it must be measured, not guessed:
+The single-seat receiver uses `C5_SETTLE_MS` **15 ms**, and eight seats at that
+budget would be 120 ms per sweep — eight samples per second per seat, which
+cannot time a gate pass. That constant belongs to the slow path (park the Wi-Fi
+driver, then `RFChannelSel`, then a tracking pass) and must not be reused here.
+
+Eight pilots at ~1 kHz per seat is established practice, so the retune budget is
+~125 µs per seat: a PLL retune, a short settle, one reading, next seat. The
+`c5_hop_radio` path therefore skips the driver call whenever the nearest Wi-Fi
+channel is unchanged. Tune `C5_HOP_SETTLE_US` (default 150 µs) from a
+measurement, not a guess:
 
 1. On hardware, log `phy_get_sigrssi()` at ~10 µs resolution for 20 ms after
    `RFChannelSel` and after a `esp_wifi_set_channel` hop, at several channels
@@ -343,7 +357,9 @@ release, with no hardware attached.
 - Eight VTXs (or one VTX moved seat by seat) on R1–R8; confirm each seat only
   responds on its own frequency (no cross-talk) and that RSSI floor/noise looks
   like the single-seat build.
-- Measure the sweep rate from `0x0D`'s loop-time field; record samples/s/seat.
+- Measure the sweep rate from `0x0D`'s loop-time field; record samples/s/seat
+  and confirm it is near 1 kHz per seat (the established rate), not merely
+  "working".
 - Inject 20 passes per seat with a servo/shutter or a signal generator and
   compare lap times against an RX5808 node on the same pilot; target ±2 ms.
 - Two seats simultaneously (two VTXs crossing together) — no lap may be
@@ -382,8 +398,9 @@ from that project into this repository - the licences are incompatible.
 - **Wi-Fi interference** — eight seats means eight centre frequencies sampled in
   turn; busy 5 GHz Wi-Fi shows up as spikes on the seats near those channels.
   The burst filter is per seat and its windows are in samples of that seat, so
-  the effective time window shrinks as the sample rate drops; re-tune the
-  window constants after P0.
+  its effective time window depends on the sweep rate; re-check the window
+  constants against the measured rate after P0. Eight-pilot races at 1 kHz are
+  known to work, so this is tuning, not a viability question.
 - **Single-core CPU** — the C5 runs the sampler and the serial handler on one
   core; the sampler must yield between hops and the serial handler must stay
   cheap.

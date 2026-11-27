@@ -52,6 +52,7 @@ public:
 
 private:
     bool ready_ = false;
+    int lastWifiChannel_ = -1;
 };
 
 }  // namespace mp

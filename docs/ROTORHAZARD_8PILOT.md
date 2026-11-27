@@ -271,6 +271,18 @@ tuned to Raceband R1-R8:
 | **shipped default** (all stages) | 15 us | **1019 Hz** |
 | staged hop, both skipped | 20 us | 1353 Hz |
 
+Measured again on the target rather than a dev box (Pi 4, eight seats, shipped
+2.1.1 firmware, `rh-server 4.6.0-dev.8` polling at its own cadence):
+
+| condition | rate |
+|---|---|
+| host-free (no server attached) | **1018 Hz/seat** |
+| real timer polling the board | **930 Hz/seat** |
+
+The synthetic 1 kHz poller used earlier (400-690 Hz) was pessimistic: it drove
+the port harder than RotorHazard's own polling pattern does. Quote **930 Hz/seat**
+as what a race sees and 1018 Hz/seat as the capability with no host attached.
+
 What the numbers establish:
 
 - **The driver call was half the cost.** `esp_wifi_set_channel` runs on every hop
